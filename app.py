@@ -3,6 +3,7 @@ import io
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+import logging # 로깅 모듈 임포트
 
 # Windows 터미널/PowerShell에서 한글 로그가 깨지지 않도록 UTF-8로 래핑
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -24,6 +25,13 @@ from flask_login import (
 
 
 app = Flask(__name__)
+
+# [수정된 부분] Gunicorn 로거와 연결하여 Render 로그에 잘 표시되도록 설정
+if __name__ != '__main__':
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
+
 app.config['SECRET_KEY']                     = os.getenv('FLASK_SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI']        = 'sqlite:///vitamin_chat.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -39,9 +47,9 @@ client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 @login_manager.user_loader
 def load_user(user_id):
-    # SQLAlchemy 2.0 권장 방식
     return db.session.get(User, int(user_id))
 
+# ... (register, login, logout 함수는 동일) ...
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -77,10 +85,12 @@ def logout():
     flash("로그아웃되었습니다.", "info")
     return redirect(url_for('login'))
 
+
 @app.route('/chat', methods=['GET', 'POST'])
 @login_required
 def chat():
     if request.method == 'POST':
+        # ... (POST 상단 코드는 동일) ...
         data = request.get_json()
         user_msg = data.get('message', '').strip()
         age = data.get('age')
@@ -93,8 +103,9 @@ def chat():
             current_user.age = age
             current_user.gender = gender
             db.session.commit()
-
+            
         try:
+            # ... (conv 생성 및 commit 코드는 동일) ...
             conv = Conversation(
                 user_id=current_user.id, timestamp=datetime.utcnow(),
                 user_message=user_msg, bot_reply="", symptom_text=user_msg,
@@ -107,36 +118,7 @@ def chat():
             stream = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {
-                        "role": "system", 
-                        "content": (
-                            "당신은 사용자의 증상을 분석하여, 필요한 영양소를 먼저 제시하고 그 이유를 설명한 뒤, 구체적인 제품을 추천하는 '영양학 컨설턴트'입니다. "
-                            "답변은 반드시 아래의 논리적 순서를 따라야 합니다. "
-                            "어떠한 마크다운이나 특수 기호(예: #, *, - 등)도 절대 사용하지 말고, 오직 일반 텍스트와 자연스러운 줄바꿈만으로 답변을 구성해주세요."
-                        )
-                    },
-                    {
-                        "role": "user", 
-                        "content": (
-                            f"{age}세 {gender} 사용자가 \"{user_msg}\" 증상을 겪고 있습니다.\n\n"
-                            "아래의 4단계 순서에 맞춰 답변을 생성해주세요:\n\n"
-                            "1: 증상에 필요한 비타민/영양소 종류를 먼저 나열합니다.\n"
-                            "2: 왜 그 영양소들이 필요한지 이유를 간략하게 설명합니다.\n"
-                            "3: 위 영양소들이 포함된 제품들을 저함량, 중함량, 고함량으로 나누어 각각 2~3개씩 추천합니다.\n"
-                            "4: 각 제품의 브랜드, 제품명, 주요 성분, 복용량/주기를 명확히 기재합니다.\n\n"
-                            "--- 답변 예시 형식 ---\n"
-                            "OO세 OOO님의 '{user_msg}' 증상에 따라, 다음과 같은 영양소 섭취가 도움이 될 수 있습니다.\n\n"
-                            "추천 영양소: 비타민 A, 루테인, 지아잔틴\n\n"
-                            "추천 이유: 비타민 A는 시력 유지에 필수적이며, 루테인과 지아잔틴은 눈의 피로를 줄여주고 황반을 보호하는 역할을 합니다.\n\n"
-                            "제품 추천:\n\n"
-                            "저함량 제품:\n"
-                            "브랜드: [브랜드명]\n"
-                            "제품명: [제품명]\n"
-                            "주요 성분: [주요 성분]\n"
-                            "복용량/주기: [복용량 및 주기 정보]\n\n"
-                            "(이어서 중함량, 고함량 제품 추천...)"
-                        )
-                    }
+                    # ... (messages 내용은 동일) ...
                 ],
                 stream=True
             )
@@ -160,7 +142,7 @@ def chat():
                     except Exception as e:
                         db.session.rollback()
                         error_message = f"스트림 처리 중 오류: {str(e)}"
-                        print(error_message)
+                        app.logger.error(error_message) # print -> app.logger.error
                         yield error_message
 
             return Response(generate_stream(stream, conv_id), mimetype='text/plain')
@@ -168,13 +150,14 @@ def chat():
         except Exception as e:
             db.session.rollback()
             error_message = f"API 호출 오류: {str(e)}"
-            print(error_message)
+            app.logger.error(error_message) # print -> app.logger.error
             return Response(error_message, status=500)
 
     # GET 요청 처리
     logs = Conversation.query.filter_by(user_id=current_user.id).order_by(Conversation.timestamp).all()
     return render_template('chat.html', logs=logs, user_age=current_user.age, user_gender=current_user.gender)
 
+# ... (send_email, save_note, history, home 함수는 동일) ...
 @app.route('/send_email', methods=['POST'])
 @login_required
 def route_send_email():
@@ -220,8 +203,13 @@ def home():
         return redirect(url_for('chat'))
     return redirect(url_for('login'))
 
+
 @app.errorhandler(500)
 def handle_internal_server_error(e):
-    print(f"Internal Server Error: {e}")
+    # [수정된 부분] print -> app.logger.error, 상세 오류를 함께 기록
+    app.logger.error(f"Internal Server Error: {e}", exc_info=True)
     return jsonify(error="서버 내부에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요."), 500
 
+
+# [수정된 부분] if __name__ == '__main__' 블록 삭제
+# gunicorn이 app 객체를 직접 사용하므로, 이 블록은 더 이상 필요 없습니다.
