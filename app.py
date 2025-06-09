@@ -5,9 +5,6 @@ from dotenv import load_dotenv
 from datetime import datetime
 import logging
 
-# Windows 터미널/PowerShell에서 한글 로그가 깨지지 않도록 UTF-8로 래핑
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
 # .env 파일에서 환경 변수 로드
 load_dotenv()
 
@@ -23,7 +20,7 @@ from flask_login import (
     current_user
 )
 
-
+# Flask 앱을 생성할 때, instance 폴더를 인식하도록 인자를 추가합니다.
 app = Flask(__name__, instance_relative_config=True)
 
 # Gunicorn 로거와 연결하여 Render 로그에 잘 표시되도록 설정
@@ -32,15 +29,21 @@ if __name__ != '__main__':
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
 
-# [수정된 부분] 데이터베이스 연결 설정
-# Render 환경 변수에 DATABASE_URL이 있으면 PostgreSQL을 사용하고, 없으면 로컬의 SQLite를 사용합니다.
+# 환경 변수에서 DATABASE_URL을 가져옵니다.
+# Render 환경에서는 PostgreSQL 주소를, 로컬에서는 기존 SQLite 주소를 사용합니다.
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     # SQLAlchemy 1.4+ 버전과의 호환성을 위해 주소의 스키마를 변경합니다.
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 else:
     # 로컬 환경을 위한 설정
-    db_url = 'sqlite:///vitamin_chat.db'
+    # 로컬에서는 instance 폴더가 없을 경우를 대비해 생성합니다.
+    try:
+        os.makedirs(app.instance_path)
+    except OSError:
+        pass # 이미 폴더가 있는 경우엔 아무것도 하지 않음
+    db_url = f"sqlite:///{os.path.join(app.instance_path, 'vitamin_chat.db')}"
+
 
 app.config['SECRET_KEY']                     = os.getenv('FLASK_SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI']        = db_url
@@ -49,15 +52,7 @@ app.config['JSON_AS_ASCII']                  = False
 
 db.init_app(app)
 
-with app.app_context():
-    # 로컬 환경(SQLite)에서 instance 폴더가 없을 경우를 대비해 생성합니다.
-    if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
-        try:
-            os.makedirs(app.instance_path)
-        except OSError:
-            pass
-    db.create_all()
-
+# [수정된 부분] DB 생성 코드를 여기서 삭제합니다. (init_db.py로 이동)
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
@@ -133,8 +128,36 @@ def chat():
             stream = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "당신은 영양 전문가 겸 소비자 가이드 작성자입니다. 사용자의 요청에 따라 비타민 제품을 추천합니다. 답변은 어떠한 마크다운이나 특수 기호(예: #, *, - 등)도 절대 사용하지 말고, 오직 일반 텍스트와 자연스러운 줄바꿈만으로 구성해야 합니다. 각 제품 정보는 '브랜드:', '제품명:', '복용량/주기:' 와 같은 명확한 라벨을 사용하여 구분해주세요."},
-                    {"role": "user", "content": f"{age}세 {gender} 사용자가 \"{user_msg}\" 증상을 겪고 있습니다. 이 사용자에게 적합한 저함량, 중함량, 고함량 비타민 제품을 각각 1~2개씩 추천해주세요."}
+                    {
+                        "role": "system",
+                        "content": (
+                            "당신은 사용자의 증상을 분석하여, 필요한 영양소를 먼저 제시하고 그 이유를 설명한 뒤, 구체적인 제품을 추천하는 '영양학 컨설턴트'입니다. "
+                            "답변은 반드시 아래의 논리적 순서를 따라야 합니다. "
+                            "어떠한 마크다운이나 특수 기호(예: #, *, - 등)도 절대 사용하지 말고, 오직 일반 텍스트와 자연스러운 줄바꿈만으로 답변을 구성해주세요."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"{age}세 {gender} 사용자가 \"{user_msg}\" 증상을 겪고 있습니다.\n\n"
+                            "아래의 4단계 순서에 맞춰 답변을 생성해주세요:\n\n"
+                            "1단계: 증상에 필요한 비타민/영양소 종류를 먼저 나열합니다.\n"
+                            "2단계: 왜 그 영양소들이 필요한지 이유를 간략하게 설명합니다.\n"
+                            "3단계: 위 영양소들이 포함된 제품들을 저함량, 중함량, 고함량으로 나누어 각각 1~2개씩 추천합니다.\n"
+                            "4단계: 각 제품의 브랜드, 제품명, 주요 성분, 복용량/주기를 명확히 기재합니다.\n\n"
+                            "--- 답변 예시 형식 ---\n"
+                            "OO세 OOO님의 '{user_msg}' 증상에 따라, 다음과 같은 영양소 섭취가 도움이 될 수 있습니다.\n\n"
+                            "추천 영양소: 비타민 A, 루테인, 지아잔틴\n\n"
+                            "추천 이유: 비타민 A는 시력 유지에 필수적이며, 루테인과 지아잔틴은 눈의 피로를 줄여주고 황반을 보호하는 역할을 합니다.\n\n"
+                            "제품 추천:\n\n"
+                            "저함량 제품:\n"
+                            "브랜드: [브랜드명]\n"
+                            "제품명: [제품명]\n"
+                            "주요 성분: [주요 성분]\n"
+                            "복용량/주기: [복용량 및 주기 정보]\n\n"
+                            "(이어서 중함량, 고함량 제품 추천...)"
+                        )
+                    }
                 ],
                 stream=True
             )
@@ -147,12 +170,12 @@ def chat():
                             content = chunk.choices[0].delta.content or ""
                             full_reply += content
                             yield content
-                        
+
                         db_conv = db.session.get(Conversation, conversation_id)
                         if db_conv:
                             db_conv.bot_reply = full_reply
                             db.session.commit()
-                        
+
                         yield f"__CONV_ID__{conversation_id}"
 
                     except Exception as e:
@@ -216,4 +239,10 @@ def history():
 def home():
     if current_user.is_authenticated:
         return redirect(url_for('chat'))
-    return redirect(url_for('
+    return redirect(url_for('login'))
+
+
+@app.errorhandler(500)
+def handle_internal_server_error(e):
+    app.logger.error(f"Internal Server Error: {e}", exc_info=True)
+    return jsonify(error="서버 내부에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요."), 500
