@@ -1,4 +1,3 @@
-
 import sys
 import io
 import os
@@ -25,7 +24,8 @@ from flask_login import (
 )
 
 
-app = Flask(__name__)
+# [수정된 부분] Flask 앱을 생성할 때, instance 폴더를 인식하도록 인자를 추가합니다.
+app = Flask(__name__, instance_relative_config=True)
 
 # Gunicorn 로거와 연결하여 Render 로그에 잘 표시되도록 설정
 if __name__ != '__main__':
@@ -40,8 +40,13 @@ app.config['JSON_AS_ASCII']                  = False
 
 db.init_app(app)
 
-# [수정된 부분] 앱 컨텍스트 안에서 데이터베이스 생성 코드를 추가합니다.
+# [수정된 부분] 앱 컨텍스트 안에서 데이터베이스를 생성하기 전에,
+# 데이터베이스 파일이 저장될 'instance' 폴더가 없을 경우를 대비해 생성해줍니다.
 with app.app_context():
+    try:
+        os.makedirs(app.instance_path)
+    except OSError:
+        pass # 이미 폴더가 있는 경우엔 아무것도 하지 않음
     db.create_all()
 
 login_manager = LoginManager()
