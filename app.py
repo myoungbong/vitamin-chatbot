@@ -225,7 +225,3 @@ def handle_internal_server_error(e):
     print(f"Internal Server Error: {e}")
     return jsonify(error="서버 내부에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요."), 500
 
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True)
