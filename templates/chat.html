@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+
+{% block title %}
+대화형 비타민 챗
+{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+    <aside class="left-sidebar">
+        <h3>메뉴</h3>
+        <a href="{{ url_for('chat') }}" class="btn-new-chat">
+            새 대화 시작
+        </a>
+        <a href="{{ url_for('history') }}" class="btn-history">
+            전체 대화 이력
+        </a>
+    </aside>
+
+    <main class="chat-main">
+        <h2>대화형 비타민 챗</h2>
+        <div class="user-info-inputs">
+            <label>나이:
+                <input id="age-input" type="number" min="1" max="120" style="width:80px;" value="{{ user_age or '' }}">
+            </label>
+            <label>성별:
+                <select id="gender-select">
+                    <option value="">선택</option>
+                    <option value="남성" {% if user_gender == '남성' %}selected{% endif %}>남성</option>
+                    <option value="여성" {% if user_gender == '여성' %}selected{% endif %}>여성</option>
+                    <option value="기타" {% if user_gender == '기타' %}selected{% endif %}>기타</option>
+                </select>
+            </label>
+        </div>
+
+        <div id="chat-box">
+            {% for c in logs %}
+            <div class="conversation-item" data-conv-id="{{ c.id }}">
+                <div style="text-align:right; margin-bottom: 5px;"><strong>나 ({{ c.age }}세 {{ c.gender }}):</strong> {{ c.user_message }}</div>
+                <div style="text-align:left;">
+                    <strong>챗봇:</strong>
+                    <div class="recommendation">{{ c.bot_reply | safe }}</div>
+                    <div class="actions">
+                        <button class="btn-email">이메일로 받기</button>
+                        <button class="btn-save" {% if c.saved %}disabled{% endif %}>
+                            {% if c.saved %}✅ 저장됨{% else %}메모하기{% endif %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="input-area">
+            <input id="user-input" type="text" placeholder="증상 입력">
+            <button id="send-btn">전송</button>
+        </div>
+    </main>
+
+    <aside class="right-sidebar">
+        <div class="info-card">
+            <h3>💡 사용 팁</h3>
+            <ul>
+                <li><strong>구체적인 증상</strong>을 알려주세요. (예: "피곤하고 눈이 뻑뻑해요")</li>
+                <li><strong>앓고 있는 질환</strong>이나 <strong>복용 중인 약</strong>이 있다면 함께 알려주세요.</li>
+                <li>추천 받은 제품은 참고용으로 활용하세요.</li>
+            </ul>
+        </div>
+        <div class="info-card disclaimer">
+            <h3>⚠️ 주의사항</h3>
+            <p>
+                본 서비스가 제공하는 정보는 참고용이며, 의학적인 진단이나 처방을 대체할 수 없습니다. 
+                <strong>건강에 관한 문제는 반드시 전문 의사와 상담하세요.</strong>
+            </p>
+        </div>
+    </aside>
+</div>
+
+
+<script>
+// ... (JavaScript 코드는 이전과 동일) ...
+document.getElementById('send-btn').addEventListener('click', async () => {
+    const sendBtn = document.getElementById('send-btn');
+    const userInput = document.getElementById('user-input');
+    const age = parseInt(document.getElementById('age-input').value);
+    const gender = document.getElementById('gender-select').value;
+    const message = userInput.value.trim();
+    const chatBox = document.getElementById('chat-box');
+
+    if (!age || !gender) return alert('나이와 성별을 선택해주세요.');
+    if (!message) return alert('증상을 입력해주세요.');
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = '생성 중...';
+
+    const convItem = document.createElement('div');
+    convItem.className = 'conversation-item';
+
+    const userDiv = document.createElement('div');
+    userDiv.style.textAlign = 'right';
+    userDiv.style.marginBottom = '5px';
+    userDiv.innerHTML = `<strong>나 (${age}세 ${gender}):</strong> ${message}`;
+    convItem.appendChild(userDiv);
+
+    const botOuterDiv = document.createElement('div');
+    botOuterDiv.style.textAlign = 'left';
+    botOuterDiv.innerHTML = `
+        <strong>챗봇:</strong>
+        <div class="recommendation"></div>
+        <div class="actions" style="display: none;">
+            <button class="btn-email">이메일로 받기</button>
+            <button class="btn-save">메모하기</button>
+        </div>
+    `;
+    convItem.appendChild(botOuterDiv);
+    chatBox.appendChild(convItem);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    userInput.value = '';
+
+    const recommendationDiv = botOuterDiv.querySelector('.recommendation');
+    const actionsDiv = botOuterDiv.querySelector('.actions');
+
+    try {
+        const response = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message, age, gender})
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`서버 오류: ${errorText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            
+            if (chunk.includes('__CONV_ID__')) {
+                const parts = chunk.split('__CONV_ID__');
+                recommendationDiv.innerText += parts[0];
+                const convId = parts[1].trim();
+                if(convId) {
+                    convItem.dataset.convId = convId;
+                    actionsDiv.style.display = 'block';
+                }
+            } else {
+                recommendationDiv.innerText += chunk;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    } catch (error) {
+        recommendationDiv.innerText = `오류 발생: ${error.message}`;
+        recommendationDiv.style.color = 'red';
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = '전송';
+    }
+});
+
+document.getElementById('chat-box').addEventListener('click', async (e) => {
+    const target = e.target;
+    const convItem = target.closest('.conversation-item');
+    if (!convItem) return;
+
+    const convId = convItem.dataset.convId;
+    if (!convId) return;
+
+    if (target.classList.contains('btn-email')) {
+        target.disabled = true;
+        target.textContent = '전송 중...';
+        try {
+            const res = await fetch('/send_email', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ conv_id: convId })
+            });
+            const result = await res.json();
+            if (!result.success) throw new Error(result.error);
+            alert('이메일 전송 완료!');
+        } catch (error) {
+            alert(`오류: ${error.message}`);
+        } finally {
+            target.disabled = false;
+            target.textContent = '이메일로 받기';
+        }
+    }
+
+    if (target.classList.contains('btn-save')) {
+        target.disabled = true;
+        target.textContent = '저장 중...';
+        try {
+            const res = await fetch('/save_note', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ conv_id: convId })
+            });
+            const result = await res.json();
+            if (!result.success) throw new Error(result.error);
+            target.textContent = '✅ 저장됨';
+        } catch (error) {
+            alert(`오류: ${error.message}`);
+            target.textContent = '메모하기';
+            target.disabled = false;
+        }
+    }
+});
+</script>
+{% endblock %}

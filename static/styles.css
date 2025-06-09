@@ -1,0 +1,317 @@
+/* static/styles.css (Fresh & Clean 테마 + 3단 레이아웃) */
+
+/* --- 기본 & 전체 레이아웃 --- */
+:root {
+    --background-color: #f8f9fa; /* 부드러운 흰색 배경 */
+    --surface-color: #ffffff;    /* 컨텐츠 영역 배경 */
+    --primary-color: #28a745;     /* 주요 색상 (성공, 버튼) - 녹색 */
+    --secondary-color: #6c757d;   /* 보조 색상 (글씨) */
+    --accent-color: #fd7e14;      /* 강조 색상 (포인트) - 오렌지 */
+    --text-color: #212529;        /* 기본 글씨 색상 */
+    --border-color: #dee2e6;      /* 테두리 색상 */
+}
+
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: 'Noto Sans KR', sans-serif;
+    margin: 0;
+    padding: 20px;
+    line-height: 1.6;
+    font-size: 23px;
+}
+
+.container {
+    max-width: 1200px; /* 3단 레이아웃을 위해 너비 확장 */
+    margin: 0 auto;
+    background-color: transparent; /* 컨테이너 자체 배경은 투명하게 */
+    padding: 0;
+    border-radius: 8px;
+    border: none;
+}
+
+h2 {
+    color: var(--text-color);
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+    font-weight: 700;
+    margin-top: 0;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 20px 0;
+}
+
+/* --- 네비게이션 & 링크 --- */
+nav {
+    text-align: right;
+    margin-bottom: 20px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+nav a {
+    color: var(--primary-color);
+    text-decoration: none;
+    margin: 0 10px;
+    font-weight: 700;
+    transition: color 0.3s;
+}
+
+nav a:hover {
+    color: var(--text-color);
+}
+
+/* --- 폼 요소 (입력창, 버튼 등) --- */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+select {
+    width: auto;
+    padding: 10px;
+    background-color: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+    margin-bottom: 0;
+    font-size: 1em;
+}
+input:focus, select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.2);
+}
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1em;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+button:hover {
+    background-color: #218838;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+
+/* --- 채팅 화면 --- */
+#chat-box {
+    border: 1px solid var(--border-color);
+    background-color: #fff;
+    height: 500px; /* 높이 살짝 키움 */
+    overflow-y: auto;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.conversation-item {
+    padding: 12px;
+}
+
+.recommendation {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 5px;
+    border: 1px solid #eee;
+}
+
+.actions {
+    margin-top: 10px;
+}
+
+.actions button {
+    font-size: 0.8em;
+    padding: 6px 10px;
+    margin-top: 5px;
+    font-weight: 700;
+    background-color: transparent;
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+}
+.actions button:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* --- 이력(History) 페이지 테이블 --- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    border: 1px solid var(--border-color);
+    padding: 12px;
+    text-align: left;
+    vertical-align: top;
+}
+
+th {
+    background-color: #e9ecef;
+}
+
+/* --- 알림 메시지 (Flash) --- */
+.flash {
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    font-weight: 500;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.flash.success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+.flash.danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+.flash.info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
+.flash.warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; }
+
+
+/* --- 3단 레이아웃 스타일 --- */
+.chat-layout {
+    display: flex;
+    gap: 30px; /* 컬럼 사이의 간격 */
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.left-sidebar, .right-sidebar {
+    flex: 0 0 220px; /* 양쪽 사이드바 너비 고정 */
+}
+
+.chat-main {
+    flex: 1; /* 중앙 콘텐츠가 남은 공간을 모두 차지 */
+    background-color: var(--surface-color);
+    padding: 20px 30px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+/* --- 왼쪽 사이드바 스타일 --- */
+.left-sidebar h3 {
+    font-size: 1.2em;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+.left-sidebar a {
+    display: block;
+    text-decoration: none;
+    padding: 12px 15px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    text-align: center;
+    transition: background-color 0.3s, color 0.3s;
+}
+.btn-new-chat {
+    background-color: var(--primary-color);
+    color: white;
+}
+.btn-new-chat:hover {
+    background-color: #218838;
+}
+.btn-history {
+    background-color: #fff;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+.btn-history:hover {
+    background-color: #f1f1f1;
+}
+
+/* --- 오른쪽 사이드바 스타일 (수정된 부분) --- */
+.info-card {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0; /* 내부 컨텐츠에 패딩을 주기 위해 0으로 변경 */
+    margin-bottom: 20px;
+    overflow: hidden; /* h3 배경색이 border-radius를 넘지 않도록 */
+}
+.info-card h3 {
+    margin: 0;
+    padding: 12px 15px;
+    font-size: 1.1em;
+    background-color: #e9ecef;
+    border-bottom: 1px solid var(--border-color);
+}
+.info-card p, .info-card ul {
+    font-size: 0.9em;
+    line-height: 1.7; /* 줄 간격 넓힘 */
+    color: #555;
+    padding: 15px;
+    margin: 0;
+}
+.info-card ul {
+    list-style: none; /* 기본 list-style 제거 */
+    padding-left: 15px;
+}
+.info-card li {
+    padding-left: 20px;
+    position: relative;
+    margin-bottom: 8px;
+}
+/* 리스트 앞의 아이콘 스타일 */
+.info-card li::before {
+    content: '✓';
+    color: var(--primary-color);
+    font-weight: 700;
+    position: absolute;
+    left: 0;
+}
+
+.info-card.disclaimer h3 {
+    background-color: #ffeeba;
+    color: #856404;
+    border-bottom-color: #ffdf7e;
+}
+.info-card.disclaimer p {
+    color: #856404;
+}
+.info-card.disclaimer strong {
+    font-weight: 700;
+}
+
+
+/* --- 채팅창 내부 요소들 --- */
+.user-info-inputs {
+    margin-bottom: 15px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.input-area {
+    display: flex;
+    margin-top: 15px;
+}
+#user-input {
+    flex: 1;
+    margin-right: 10px;
+    width: auto; /* 고정 너비 해제 */
+}
+#send-btn {
+    width: 80px;
+}

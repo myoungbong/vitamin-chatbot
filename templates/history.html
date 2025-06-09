@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}내 대화 이력{% endblock %}
+{% block content %}
+<h2>내 대화 이력</h2>
+
+<style>
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    /* 추천 결과 셀 스타일 */
+    .recommend-cell {
+        white-space: pre-wrap; /* 줄바꿈과 공백을 그대로 표시 */
+        word-break: break-word; /* 긴 단어가 셀을 넘어가지 않도록 함 */
+        max-width: 600px; /* 셀의 최대 너비 지정 */
+    }
+</style>
+
+<table>
+    <thead>
+        <tr>
+            <th style="width: 150px;">날짜</th>
+            <th>증상</th>
+            <th>추천 결과</th>
+            <th style="width: 80px;">메모됨</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for conv in logs %}
+        <tr>
+            <td>{{ conv.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ conv.symptom_text }}</td>
+            <td>
+                <div class="recommend-cell">{{ conv.bot_reply }}</div>
+            </td>
+            <td style="text-align: center;">{% if conv.saved %}✅{% else %}&nbsp;{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="4" style="text-align: center;">대화 이력이 없습니다.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
