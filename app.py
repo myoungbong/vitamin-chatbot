@@ -1,9 +1,10 @@
+
 import sys
 import io
 import os
 from dotenv import load_dotenv
 from datetime import datetime
-import logging # 로깅 모듈 임포트
+import logging
 
 # Windows 터미널/PowerShell에서 한글 로그가 깨지지 않도록 UTF-8로 래핑
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -26,7 +27,7 @@ from flask_login import (
 
 app = Flask(__name__)
 
-# [수정된 부분] Gunicorn 로거와 연결하여 Render 로그에 잘 표시되도록 설정
+# Gunicorn 로거와 연결하여 Render 로그에 잘 표시되도록 설정
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
@@ -39,6 +40,10 @@ app.config['JSON_AS_ASCII']                  = False
 
 db.init_app(app)
 
+# [수정된 부분] 앱 컨텍스트 안에서 데이터베이스 생성 코드를 추가합니다.
+with app.app_context():
+    db.create_all()
+
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
@@ -49,7 +54,7 @@ client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-# ... (register, login, logout 함수는 동일) ...
+# ... (이후의 모든 코드는 이전과 동일합니다) ...
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -85,12 +90,10 @@ def logout():
     flash("로그아웃되었습니다.", "info")
     return redirect(url_for('login'))
 
-
 @app.route('/chat', methods=['GET', 'POST'])
 @login_required
 def chat():
     if request.method == 'POST':
-        # ... (POST 상단 코드는 동일) ...
         data = request.get_json()
         user_msg = data.get('message', '').strip()
         age = data.get('age')
@@ -103,9 +106,8 @@ def chat():
             current_user.age = age
             current_user.gender = gender
             db.session.commit()
-            
+
         try:
-            # ... (conv 생성 및 commit 코드는 동일) ...
             conv = Conversation(
                 user_id=current_user.id, timestamp=datetime.utcnow(),
                 user_message=user_msg, bot_reply="", symptom_text=user_msg,
@@ -118,7 +120,8 @@ def chat():
             stream = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    # ... (messages 내용은 동일) ...
+                    {"role": "system", "content": "당신은 영양 전문가 겸 소비자 가이드 작성자입니다. ..."},
+                    {"role": "user", "content": f"{age}세 {gender} 사용자가 ..."}
                 ],
                 stream=True
             )
@@ -142,7 +145,7 @@ def chat():
                     except Exception as e:
                         db.session.rollback()
                         error_message = f"스트림 처리 중 오류: {str(e)}"
-                        app.logger.error(error_message) # print -> app.logger.error
+                        app.logger.error(error_message)
                         yield error_message
 
             return Response(generate_stream(stream, conv_id), mimetype='text/plain')
@@ -150,14 +153,13 @@ def chat():
         except Exception as e:
             db.session.rollback()
             error_message = f"API 호출 오류: {str(e)}"
-            app.logger.error(error_message) # print -> app.logger.error
+            app.logger.error(error_message)
             return Response(error_message, status=500)
 
     # GET 요청 처리
     logs = Conversation.query.filter_by(user_id=current_user.id).order_by(Conversation.timestamp).all()
     return render_template('chat.html', logs=logs, user_age=current_user.age, user_gender=current_user.gender)
 
-# ... (send_email, save_note, history, home 함수는 동일) ...
 @app.route('/send_email', methods=['POST'])
 @login_required
 def route_send_email():
@@ -206,10 +208,5 @@ def home():
 
 @app.errorhandler(500)
 def handle_internal_server_error(e):
-    # [수정된 부분] print -> app.logger.error, 상세 오류를 함께 기록
     app.logger.error(f"Internal Server Error: {e}", exc_info=True)
     return jsonify(error="서버 내부에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요."), 500
-
-
-# [수정된 부분] if __name__ == '__main__' 블록 삭제
-# gunicorn이 app 객체를 직접 사용하므로, 이 블록은 더 이상 필요 없습니다.
